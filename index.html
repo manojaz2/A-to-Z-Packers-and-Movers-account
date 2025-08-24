@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>A to Z – Daily Accounts (Realtime)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{
+      --primary-1:#0ea5e9;   /* blue */
+      --primary-2:#0369a1;   /* navy */
+      --accent-red:#dc2626;  /* red buttons / expense */
+      --ok-green:#16a34a;    /* income green */
+    }
+    .card{background:#fff;border-radius:1rem;box-shadow:0 6px 18px rgba(2,6,23,.08)}
+    .tab-active{background:linear-gradient(135deg,var(--primary-1),var(--primary-2));color:#fff}
+    .btn{border-radius:.9rem;padding:.65rem 1rem;font-weight:600}
+    .btn-primary{background:var(--primary-1);color:#fff}
+    .btn-primary:hover{background:var(--primary-2)}
+    .btn-danger{background:var(--accent-red);color:#fff}
+    .text-income{color:var(--ok-green)}
+    .text-expense{color:var(--accent-red)}
+    .hidden{display:none}
+    /* floating WhatsApp button */
+    .wa-fab{position:fixed;right:16px;bottom:16px;background:#25D366;color:#fff;
+            width:56px;height:56px;border-radius:50%;display:flex;align-items:center;
+            justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.18);font-size:26px;z-index:50}
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+  <!-- Header -->
+  <header class="card max-w-5xl mx-auto mt-4 px-5 py-4">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">A to Z Packers & Movers</h1>
+        <p class="text-slate-600">Daily Accounts (Firestore, realtime)</p>
+      </div>
+      <div class="text-right">
+        <p id="todayText" class="text-slate-600"></p>
+        <div class="mt-2 flex items-center gap-2 justify-end">
+          <span id="whoami" class="text-sm text-slate-600"></span>
+          <button id="btnSignOutTop" class="btn btn-danger hidden">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Auth -->
+  <section id="authCard" class="card max-w-5xl mx-auto mt-4 p-5">
+    <h2 class="text-xl font-semibold mb-3">Sign in</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <input id="email" type="email" placeholder="you@example.com" class="px-3 py-2 border rounded-xl"/>
+      <input id="password" type="password" placeholder="••••••••" class="px-3 py-2 border rounded-xl"/>
+      <button id="btnSignIn" class="btn btn-primary">Sign in</button>
+    </div>
+    <p id="authMsg" class="mt-2 text-sm text-rose-600"></p>
+  </section>
+
+  <!-- Error banner -->
+  <div id="errBar" class="hidden max-w-5xl mx-auto mt-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-4 py-2 text-sm">
+    <span id="errText"></span>
+  </div>
+
+  <!-- App -->
+  <section id="app" class="hidden max-w-5xl mx-auto mt-4 card">
+    <div class="flex">
+      <button class="tab flex-1 py-3 px-4 tab-active" data-tab="expenses">📊 Expenses</button>
+      <button class="tab flex-1 py-3 px-4" data-tab="income">💰 Income</button>
+      <button class="tab flex-1 py-3 px-4" data-tab="settlement">🤝 Settlement</button>
+      <button class="tab flex-1 py-3 px-4" data-tab="totals">🧮 Totals</button>
+    </div>
+
+    <!-- Expenses -->
+    <div id="expenses" class="p-5">
+      <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <input type="date" id="expenseDate" class="px-3 py-2 border rounded-xl"/>
+        <select id="expenseCategory" class="px-3 py-2 border rounded-xl">
+          <option value="">Category</option>
+          <option>Fuel</option><option>Food</option><option>Stationery</option>
+          <option>Repair</option><option>Labour</option><option>Misc</option>
+        </select>
+        <select id="expensePayment" class="px-3 py-2 border rounded-xl">
+          <option value="">Mode</option><option>UPI</option><option>Cash</option>
+          <option>Bank Transfer</option><option>Card</option>
+        </select>
+        <input type="number" id="expenseAmount" placeholder="Amount ₹" step="0.01" class="px-3 py-2 border rounded-xl"/>
+        <input type="text" id="expenseDescription" placeholder="Description" class="md:col-span-3 px-3 py-2 border rounded-xl"/>
+        <button class="md:col-span-4 btn btn-danger">Add Expense</button>
+      </form>
+
+      <!-- Fix date tools -->
+      <div class="mt-3 flex gap-3 items-center">
+        <input type="date" id="fixFromDateExpenses" class="px-3 py-2 border rounded-xl" />
+        <button id="btnMoveExpensesToToday" class="btn btn-primary">Move selected day’s Expenses → Today</button>
+      </div>
+
+      <div id="expensesList" class="space-y-2 mt-4"></div>
+    </div>
+
+    <!-- Income -->
+    <div id="income" class="p-5 hidden">
+      <form id="incomeForm" class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <input type="date" id="incomeDate" class="px-3 py-2 border rounded-xl"/>
+        <select id="incomeCategory" class="px-3 py-2 border rounded-xl">
+          <option value="">Category</option>
+          <option>Packers & Movers</option><option>Courier</option>
+          <option>Ticket Booking</option><option>Other</option>
+        </select>
+        <select id="incomePayment" class="px-3 py-2 border rounded-xl">
+          <option value="">Mode</option><option>UPI</option><option>Cash</option>
+          <option>Bank Transfer</option><option>Card</option>
+        </select>
+        <input type="number" id="incomeAmount" placeholder="Amount ₹" step="0.01" class="px-3 py-2 border rounded-xl"/>
+        <input type="text" id="incomeDescription" placeholder="Description" class="md:col-span-3 px-3 py-2 border rounded-xl"/>
+        <button class="md:col-span-4 btn btn-primary">Add Income</button>
+      </form>
+
+      <!-- Fix date tools -->
+      <div class="mt-3 flex gap-3 items-center">
+        <input type="date" id="fixFromDateIncome" class="px-3 py-2 border rounded-xl" />
+        <button id="btnMoveIncomeToToday" class="btn btn-primary">Move selected day’s Income → Today</button>
+      </div>
+
+      <div id="incomesList" class="space-y-2 mt-4"></div>
+    </div>
+
+    <!-- Settlement -->
+    <div id="settlement" class="p-5 hidden">
+      <form id="settlementForm" class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <input type="date" id="settlementDate" class="px-3 py-2 border rounded-xl"/>
+        <select id="settlementType" class="px-3 py-2 border rounded-xl">
+          <option value="">Type</option>
+          <option>Given</option>
+          <option>Received</option>
+        </select>
+        <input type="number" id="settlementAmount" placeholder="Amount ₹" step="0.01" class="px-3 py-2 border rounded-xl"/>
+        <input type="text" id="settlementDescription" placeholder="Description" class="md:col-span-2 px-3 py-2 border rounded-xl"/>
+        <button class="md:col-span-4 btn btn-primary">Add Settlement</button>
+      </form>
+
+      <!-- Fix date tools -->
+      <div class="mt-3 flex gap-3 items-center">
+        <input type="date" id="fixFromDateSettlement" class="px-3 py-2 border rounded-xl" />
+        <button id="btnMoveSettlementToToday" class="btn btn-primary">Move selected day’s Settlement → Today</button>
+      </div>
+
+      <div id="settlementList" class="space-y-2 mt-4"></div>
+    </div>
+
+    <!-- Totals -->
+    <div id="totals" class="p-6 hidden">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+        <div class="bg-slate-50 rounded-xl p-4">
+          <p class="text-slate-500 text-sm">Total Expenses</p>
+          <p id="totalExpenses" class="text-2xl font-bold text-expense">₹0</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <p class="text-slate-500 text-sm">Total Income</p>
+          <p id="totalIncome" class="text-2xl font-bold text-income">₹0</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <p class="text-slate-500 text-sm">Net (Income − Expenses ± Settlement)</p>
+          <p id="netBalance" class="text-2xl font-bold text-sky-600">₹0</p>
+        </div>
+      </div>
+
+      <div class="mt-5 flex gap-3 justify-center">
+        <button id="btnShareTodayWA" class="btn btn-primary">Share Today’s Summary on WhatsApp</button>
+        <button id="btnShareCustomWA" class="btn">Share Selected Date</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Floating WA button -->
+  <a id="waFab" class="wa-fab" href="#" title="Chat on WhatsApp" aria-label="Chat on WhatsApp">💬</a>
+
+  <script type="module">
+    // Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      getFirestore, collection, addDoc, onSnapshot, query, where, getDocs,
+      serverTimestamp, writeBatch, doc
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // --- Your Firebase config (unchanged) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCieI_dFRI3K-TDNy0JFe02ndbT2ZO4bag",
+      authDomain: "a-to-z-daily-account.firebaseapp.com",
+      projectId: "a-to-z-daily-account",
+      storageBucket: "a-to-z-daily-account.firebasestorage.app",
+      messagingSenderId: "248686153632",
+      appId: "1:248686153632:web:4399b9f34b0c97ae46dec5"
+    };
+
+    // Init
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+    window.db = db; // reuse in helpers
+
+    // --- Set Manoj's WhatsApp number once ---
+    if (!localStorage.getItem("waNumber")) {
+      localStorage.setItem("waNumber", "919338888550"); // +91 9338888550
+    }
+
+    // Helpers
+    const $ = (id) => document.getElementById(id);
+    const todayISO = () => new Date().toISOString().split("T")[0];
+    const fmtINR = (n) => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n);
+
+    $("todayText").textContent =
+      new Date().toLocaleString('en-IN',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+
+    // Defaults for date pickers
+    ["expenseDate","incomeDate","settlementDate"].forEach(id=>{ const el=$(id); if(el) el.value=todayISO(); });
+
+    // Tabs
+    document.querySelectorAll(".tab").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        document.querySelectorAll(".tab").forEach(b=>b.classList.remove("tab-active"));
+        btn.classList.add("tab-active");
+        ["expenses","income","settlement","totals"].forEach(id=>$(id).classList.add("hidden"));
+        $(btn.dataset.tab).classList.remove("hidden");
+      });
+    });
+
+    // Error banner
+    function showError(e){
+      $("errText").textContent = (e?.message || e || "Unknown error");
+      $("errBar").classList.remove("hidden");
+      setTimeout(()=>$("errBar").classList.add("hidden"), 6000);
+      console.error(e);
+    }
+
+    // Auth
+    $("btnSignIn").addEventListener("click", async ()=>{
+      $("authMsg").textContent = "";
+      try{
+        const email = $("email").value.trim();
+        const pass  = $("password").value;
+        await signInWithEmailAndPassword(auth, email, pass);
+      }catch(e){ $("authMsg").textContent = e?.message || "Sign-in failed"; }
+    });
+    $("btnSignOutTop").addEventListener("click", async ()=>{ try{ await signOut(auth); }catch(e){ showError(e); } });
+
+    onAuthStateChanged(auth, (user)=>{
+      if (user){
+        $("whoami").textContent = user.email;
+        $("authCard").classList.add("hidden");
+        $("app").classList.remove("hidden");
+        $("btnSignOutTop").classList.remove("hidden");
+        startRealtime(getSelectedDate()); // start with current selected
+      }else{
+        $("whoami").textContent = "";
+        $("authCard").classList.remove("hidden");
+        $("app").classList.add("hidden");
+        $("btnSignOutTop").classList.add("hidden");
+      }
+    });
+
+    // Keep pickers in sync & reload listeners when date changes
+    function getSelectedDate(){ return $("expenseDate").value || todayISO(); }
+    ["expenseDate","incomeDate","settlementDate"].forEach(id=>{
+      const el = $(id);
+      if(!el) return;
+      el.addEventListener("change", ()=> {
+        ["expenseDate","incomeDate","settlementDate"].forEach(k=>{ const t=$(k); if(t && t!==el) t.value = el.value; });
+        startRealtime(getSelectedDate());
+      });
+    });
+
+    // Submit: Expense
+    $("expenseForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const item = {
+        date: $("expenseDate").value || todayISO(),
+        category: ($("expenseCategory").value||"").trim(),
+        payment:  ($("expensePayment").value||"").trim(),
+        description: ($("expenseDescription").value||"").trim(),
+        amount: parseFloat($("expenseAmount").value||"0"),
+        updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.email || auth.currentUser?.uid
+      };
+      if (!item.category || !item.payment || !item.amount){ showError("Category, Mode and Amount are required."); return; }
+      try{ await addDoc(collection(db,"expenses"), item); e.target.reset(); $("expenseDate").value=getSelectedDate(); }
+      catch(err){ showError(err); }
+    });
+
+    // Submit: Income
+    $("incomeForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const item = {
+        date: $("incomeDate").value || todayISO(),
+        category: ($("incomeCategory").value||"").trim(),
+        payment:  ($("incomePayment").value||"").trim(),
+        description: ($("incomeDescription").value||"").trim(),
+        amount: parseFloat($("incomeAmount").value||"0"),
+        updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.email || auth.currentUser?.uid
+      };
+      if (!item.category || !item.payment || !item.amount){ showError("Category, Mode and Amount are required."); return; }
+      try{ await addDoc(collection(db,"income"), item); e.target.reset(); $("incomeDate").value=getSelectedDate(); }
+      catch(err){ showError(err); }
+    });
+
+    // Submit: Settlement
+    $("settlementForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const item = {
+        date: $("settlementDate").value || todayISO(),
+        type: ($("settlementType").value||"").trim(), // Given or Received
+        description: ($("settlementDescription").value||"").trim(),
+        amount: parseFloat($("settlementAmount").value||"0"),
+        updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.email || auth.currentUser?.uid
+      };
+      if (!item.type || !item.amount){ showError("Type and Amount are required."); return; }
+      try{ await addDoc(collection(db,"settlement"), item); e.target.reset(); $("settlementDate").value=getSelectedDate(); }
+      catch(err){ showError(err); }
+    });
+
+    // Live listeners driven by selected date
+    let unsubExp = null, unsubInc = null, unsubSet = null;
+    function startRealtime(forDate){
+      if (unsubExp) unsubExp(); if (unsubInc) unsubInc(); if (unsubSet) unsubSet();
+
+      const expQ = query(collection(db,"expenses"), where("date","==", forDate));
+      const incQ = query(collection(db,"income"),   where("date","==", forDate));
+      const setQ = query(collection(db,"settlement"), where("date","==", forDate));
+
+      unsubExp = onSnapshot(expQ, (qs)=>{
+        const items = qs.docs.map(d=>({id:d.id, ...d.data()}));
+        renderList($("expensesList"), items, "expense");
+        updateTotals();
+      }, showError);
+
+      unsubInc = onSnapshot(incQ, (qs)=>{
+        const items = qs.docs.map(d=>({id:d.id, ...d.data()}));
+        renderList($("incomesList"), items, "income");
+        updateTotals();
+      }, showError);
+
+      unsubSet = onSnapshot(setQ, (qs)=>{
+        const items = qs.docs.map(d=>({id:d.id, ...d.data()}));
+        renderList($("settlementList"), items, "settlement");
+        updateTotals();
+      }, showError);
+    }
+
+    function renderList(container, arr, type){
+      if (!container) return;
+      container.innerHTML = "";
+      arr.sort((a,b)=>(a.updatedAt?.seconds||0)-(b.updatedAt?.seconds||0));
+      arr.forEach(it=>{
+        const rightColor = type==='expense' ? 'text-expense'
+                          : type==='income' ? 'text-income'
+                          : (it.type==='Given' ? 'text-expense' : 'text-income');
+        const rightAmount = (type==='settlement' && it.type==='Given') ? -Number(it.amount||0) : Number(it.amount||0);
+        const perMsg = `${type==='income'?'Income':type==='expense'?'Expense':'Settlement '+(it.type||'')}`
+          + ` – ${it.category||it.type||'-'} ${fmtINR(Number(it.amount||0))}`
+          + ` on ${it.date}${it.payment? ' ('+it.payment+')':''}${it.description? ' - '+it.description:''}`;
+
+        const row = document.createElement("div");
+        row.className = "border rounded-xl px-3 py-2";
+        row.innerHTML = `
+          <div class="flex justify-between items-center gap-3">
+            <div class="text-sm">
+              <div class="font-semibold">${it.category||it.type||"-"}</div>
+              <div class="text-slate-500">${new Date(it.date).toLocaleDateString('en-IN')} • ${it.payment||type||"-"}</div>
+              <div class="text-slate-700">${it.description||""}</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <a href="https://wa.me/?text=${encodeURIComponent(perMsg)}" target="_blank" title="Send on WhatsApp">💬</a>
+              <div class="text-right ${rightColor} font-bold">${fmtINR(rightAmount)}</div>
+            </div>
+          </div>`;
+        container.appendChild(row);
+      });
+      const total = arr.reduce((s,x)=>{
+        const v = Number(x.amount||0);
+        if (type==='settlement') return s + (x.type==='Given' ? -v : v);
+        return s + v;
+      }, 0);
+      container.dataset[type+"Total"] = total;
+    }
+
+    function updateTotals(){
+      const e = Number($("expensesList").dataset.expenseTotal||0);
+      const i = Number($("incomesList").dataset.incomeTotal||0);
+      const s = Number($("settlementList").dataset.settlementTotal||0);
+      $("totalExpenses").textContent = fmtINR(e);
+      $("totalIncome").textContent   = fmtINR(i);
+      $("netBalance").textContent    = fmtINR(i - e + s);
+    }
+
+    // ===== WhatsApp share helpers =====
+    async function buildDailySummary(forDate){
+      const [exQ,inQ,seQ] = [
+        query(collection(db,"expenses"),   where("date","==",forDate)),
+        query(collection(db,"income"),     where("date","==",forDate)),
+        query(collection(db,"settlement"), where("date","==",forDate)),
+      ];
+      const [ex,inc,setl] = await Promise.all([getDocs(exQ), getDocs(inQ), getDocs(seQ)]);
+      const exRows = ex.docs.map(d=>d.data());
+      const inRows = inc.docs.map(d=>d.data());
+      const seRows = setl.docs.map(d=>d.data());
+      const exTotal = exRows.reduce((s,x)=>s+Number(x.amount||0),0);
+      const inTotal = inRows.reduce((s,x)=>s+Number(x.amount||0),0);
+      const seTotal = seRows.reduce((s,x)=>s + (x.type==="Given"?-1:1)*Number(x.amount||0),0);
+      const net = inTotal - exTotal + seTotal;
+
+      const lines = [];
+      lines.push(`A to Z Packers & Movers — Daily Summary`);
+      lines.push(`Date: ${forDate}`);
+      lines.push(`--------------------------------`);
+      lines.push(`Income: ${fmtINR(inTotal)}`);
+      inRows.forEach(x=>lines.push(` • ${x.category||"-"} ${fmtINR(x.amount||0)} (${x.payment||"-"}) ${x.description?'- '+x.description:''}`));
+      lines.push(``);
+      lines.push(`Expenses: ${fmtINR(exTotal)}`);
+      exRows.forEach(x=>lines.push(` • ${x.category||"-"} ${fmtINR(x.amount||0)} (${x.payment||"-"}) ${x.description?'- '+x.description:''}`));
+      if (seRows.length){
+        lines.push(``);
+        lines.push(`Settlements: ${fmtINR(seTotal)} (Received adds, Given subtracts)`);
+        seRows.forEach(x=>lines.push(` • ${x.type||"-"} ${fmtINR(x.amount||0)} ${x.description?'- '+x.description:''}`));
+      }
+      lines.push(`--------------------------------`);
+      lines.push(`Net: ${fmtINR(net)}`);
+      return lines.join('\n');
+    }
+
+    function openWhatsAppWithText(text, toNumber = null){
+      const num = toNumber || localStorage.getItem("waNumber"); // "919338888550"
+      const base = num ? `https://wa.me/${num}` : `https://wa.me/`;
+      const url = `${base}?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank");
+    }
+
+    // Share buttons
+    const shareTodayBtn  = $("btnShareTodayWA");
+    const shareCustomBtn = $("btnShareCustomWA");
+    if (shareTodayBtn) {
+      shareTodayBtn.addEventListener("click", async ()=>{
+        try { const msg = await buildDailySummary(todayISO()); openWhatsAppWithText(msg); }
+        catch(e){ showError(e); }
+      });
+    }
+    if (shareCustomBtn) {
+      shareCustomBtn.addEventListener("click", async ()=>{
+        try {
+          const d = $("expenseDate")?.value || todayISO();
+          const msg = await buildDailySummary(d);
+          openWhatsAppWithText(msg);
+        } catch(e){ showError(e); }
+      });
+    }
+    const waFab = $("waFab");
+    if (waFab) {
+      waFab.addEventListener("click",(e)=>{
+        e.preventDefault();
+        const saved = localStorage.getItem("waNumber");
+        if (saved && /^\d{10,15}$/.test(saved)) {
+          openWhatsAppWithText("Hi, please see today’s summary.");
+        } else {
+          const num = prompt("Enter WhatsApp number with country code (e.g., 919338888550):", saved||"919338888550");
+          if (num) localStorage.setItem("waNumber", num.replace(/\D/g,""));
+        }
+      });
+    }
+
+    // ===== Move to Today tools =====
+    // Sync helper inputs to current picker (or today)
+    const syncDefault = (inputId, fallbackId) => {
+      const inEl = $(inputId);
+      if (!inEl) return;
+      const fb = $(fallbackId);
+      inEl.value = fb?.value || todayISO();
+    };
+    syncDefault("fixFromDateExpenses","expenseDate");
+    syncDefault("fixFromDateIncome","incomeDate");
+    syncDefault("fixFromDateSettlement","settlementDate");
+
+    async function moveCollectionDayToToday(collectionName, fromDate){
+      const toDate = todayISO();
+      const q = query(collection(db, collectionName), where("date","==",fromDate));
+      const snap = await getDocs(q);
+      if (snap.empty) { alert(`No ${collectionName} on ${fromDate}`); return; }
+      const batch = writeBatch(db);
+      snap.forEach(d=> batch.update(doc(db, collectionName, d.id), { date: toDate }) );
+      await batch.commit();
+      alert(`Moved ${snap.size} ${collectionName} record(s) from ${fromDate} → ${toDate}.`);
+      startRealtime(getSelectedDate()); // refresh lists
+    }
+
+    const btnME = $("btnMoveExpensesToToday");
+    if (btnME) btnME.addEventListener("click", async ()=>{
+      const d = $("fixFromDateExpenses").value;
+      if (!d) return alert("Pick a date first.");
+      try { await moveCollectionDayToToday("expenses", d); } catch(e){ showError(e); }
+    });
+    const btnMI = $("btnMoveIncomeToToday");
+    if (btnMI) btnMI.addEventListener("click", async ()=>{
+      const d = $("fixFromDateIncome").value;
+      if (!d) return alert("Pick a date first.");
+      try { await moveCollectionDayToToday("income", d); } catch(e){ showError(e); }
+    });
+    const btnMS = $("btnMoveSettlementToToday");
+    if (btnMS) btnMS.addEventListener("click", async ()=>{
+      const d = $("fixFromDateSettlement").value;
+      if (!d) return alert("Pick a date first.");
+      try { await moveCollectionDayToToday("settlement", d); } catch(e){ showError(e); }
+    });
+  </script>
+</body>
+</html>
