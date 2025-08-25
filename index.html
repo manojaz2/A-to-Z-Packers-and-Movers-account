@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>A to Z – Daily Accounts (Realtime)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{
+      --primary-1:#22c55e;  /* green */
+      --primary-2:#15803d;  /* deep green */
+      --accent-red:#dc2626; /* red for expenses */
+      --ok-green:#16a34a;  /* green for income */
+    }
+    .card{background:#fff;border-radius:1rem;box-shadow:0 6px 18px rgba(2,6,23,.08)}
+    .tab-active{background:linear-gradient(135deg,var(--primary-1),var(--primary-2));color:#fff}
+    .btn{border-radius:.9rem;padding:.65rem 1rem;font-weight:600}
+    .btn-primary{background:var(--primary-1);color:#fff}
+    .btn-primary:hover{background:var(--primary-2)}
+    .btn-danger{background:var(--accent-red);color:#fff}
+    .text-income{color:var(--ok-green)}
+    .text-expense{color:var(--accent-red)}
+    .hidden{display:none}
+    .wa-fab{position:fixed;right:16px;bottom:16px;background:#25D366;color:#fff;
+            width:56px;height:56px;border-radius:50%;display:flex;align-items:center;
+            justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.18);font-size:26px;z-index:50}
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+  <header class="card max-w-5xl mx-auto mt-3 px-5 py-4">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">A to Z Packers & Movers</h1>
+        <p class="text-slate-600">Daily Accounts (Firestore, realtime)</p>
+      </div>
+      <div class="text-right">
+        <p id="todayText" class="text-slate-600"></p>
+        <div class="mt-2 flex items-center gap-2 justify-end">
+          <span id="whoami" class="text-sm text-slate-600"></span>
+          <button id="btnSignOutTop" class="btn btn-danger hidden">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="authCard" class="card max-w-5xl mx-auto mt-3 p-4">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <input id="email" type="email" placeholder="you@example.com" class="px-3 py-2 border rounded-xl"/>
+      <input id="password" type="password" placeholder="••••••••" class="px-3 py-2 border rounded-xl"/>
+      <button id="btnSignIn" class="btn btn-primary">Sign in</button>
+    </div>
+    <p id="authMsg" class="mt-2 text-sm text-rose-600"></p>
+  </section>
+
+  <div id="errBar" class="hidden max-w-5xl mx-auto mt-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-4 py-2 text-sm">
+    <span id="errText"></span>
+  </div>
+
+  <section id="app" class="hidden max-w-5xl mx-auto mt-3 card">
+    <div class="flex text-sm">
+      <button class="tab flex-1 py-3 px-2 tab-active" data-tab="expenses">📊 Expenses</button>
+      <button class="tab flex-1 py-3 px-2" data-tab="income">💰 Income</button>
+      <button class="tab flex-1 py-3 px-2" data-tab="settlement">🤝 Settlement</button>
+      <button class="tab flex-1 py-3 px-2" data-tab="totals">🧮 Totals</button>
+      <button class="tab flex-1 py-3 px-2" data-tab="history">📜 History</button>
+    </div>
+
+    <!-- Expenses -->
+    <div id="expenses" class="p-4">
+      <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+        <input type="date" id="expenseDate" class="px-3 py-2 border rounded-xl"/>
+        <select id="expenseCategory" class="px-3 py-2 border rounded-xl"></select>
+        <select id="expensePayment" class="px-3 py-2 border rounded-xl">
+          <option value="">Mode</option><option>UPI</option><option>Cash</option>
+          <option>Bank Transfer</option><option>Card</option>
+        </select>
+        <input type="number" id="expenseAmount" placeholder="Amount ₹" step="0.01" class="px-3 py-2 border rounded-xl"/>
+        <input type="text" id="expenseDescription" placeholder="Description" class="md:col-span-3 px-3 py-2 border rounded-xl"/>
+        <button class="md:col-span-4 btn btn-danger">Add Expense</button>
+      </form>
+      <div id="expensesList" class="space-y-2"></div>
+    </div>
+
+    <!-- Income -->
+    <div id="income" class="p-4 hidden">
+      <form id="incomeForm" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+        <input type="date" id="incomeDate" class="px-3 py-2 border rounded-xl"/>
+        <select id="incomeCategory" class="px-3 py-2 border rounded-xl"></select>
+        <select id="incomePayment" class="px-3 py-2 border rounded-xl">
+          <option value="">Mode</option><option>UPI</option><option>Cash</option>
+          <option>Bank Transfer</option><option>Card</option>
+        </select>
+        <input type="number" id="incomeAmount" placeholder="Amount ₹" step="0.01" class="px-3 py-2 border rounded-xl"/>
+        <input type="text" id="incomeDescription" placeholder="Description" class="md:col-span-3 px-3 py-2 border rounded-xl"/>
+        <button class="md:col-span-4 btn btn-primary">Add Income</button>
+      </form>
+      <div id="incomesList" class="space-y-2"></div>
+    </div>
+
+    <!-- Settlement -->
+    <div id="settlement" class="p-4 hidden">
+      <form id="settlementForm" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+        <input type="date" id="settlementDate" class="px-3 py-2 border rounded-xl"/>
+        <select id="settlementType" class="px-3 py-2 border rounded-xl">
+          <option value="">Type</option><option>Given</option><option>Received</option><option>Opening</option>
+        </select>
+        <select id="settleExpenseCategory" class="px-3 py-2 border rounded-xl"></select>
+        <select id="settleIncomeCategory" class="px-3 py-2 border rounded-xl"></select>
+        <input type="number" id="settlementAmount" placeholder="Amount ₹" step="0.01" class="px-3 py-2 border rounded-xl"/>
+        <input type="text" id="settlementDescription" placeholder="Description" class="md:col-span-3 px-3 py-2 border rounded-xl"/>
+        <button class="md:col-span-4 btn btn-primary">Add Settlement</button>
+      </form>
+      <div id="settlementList" class="space-y-2"></div>
+    </div>
+
+    <!-- Totals -->
+    <div id="totals" class="p-5 hidden">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+        <div class="bg-slate-50 rounded-xl p-4">
+          <p class="text-slate-500 text-sm">Total Expenses</p>
+          <p id="totalExpenses" class="text-2xl font-bold text-expense">₹0</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <p class="text-slate-500 text-sm">Total Income</p>
+          <p id="totalIncome" class="text-2xl font-bold text-income">₹0</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <p class="text-slate-500 text-sm">Net (Income − Expenses ± Settlement)</p>
+          <p id="netBalance" class="text-2xl font-bold text-sky-600">₹0</p>
+        </div>
+      </div>
+      <div class="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
+        <button id="btnShareTodayWA" class="btn btn-primary w-full sm:w-auto">Share Today on WhatsApp</button>
+        <input type="date" id="customShareDate" class="px-3 py-2 border rounded-xl w-full sm:w-auto"/>
+        <button id="btnShareCustomWA" class="btn w-full sm:w-auto">Share Selected Date</button>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div id="history" class="p-4 hidden">
+      <div class="flex flex-col sm:flex-row gap-2 items-center mb-3">
+        <input type="date" id="histFrom" class="px-3 py-2 border rounded-xl w-full sm:w-auto"/>
+        <input type="date" id="histTo"   class="px-3 py-2 border rounded-xl w-full sm:w-auto"/>
+        <button id="btnLoadHistory" class="btn btn-primary w-full sm:w-auto">Load</button>
+      </div>
+      <div id="historyList" class="space-y-3"></div>
+    </div>
+  </section>
+
+  <!-- Fixed WhatsApp FAB (direct number) -->
+  <a id="waFab" class="wa-fab" href="https://wa.me/919338888550" target="_blank" rel="noopener" title="Chat on WhatsApp" aria-label="Chat on WhatsApp">💬</a>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      getFirestore, collection, addDoc, onSnapshot, query, where, getDocs,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCieI_dFRI3K-TDNy0JFe02ndbT2ZO4bag",
+      authDomain: "a-to-z-daily-account.firebaseapp.com",
+      projectId: "a-to-z-daily-account",
+      storageBucket: "a-to-z-daily-account.firebasestorage.app",
+      messagingSenderId: "248686153632",
+      appId: "1:248686153632:web:4399b9f34b0c97ae46dec5"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    const $ = (i)=>document.getElementById(i);
+    const fmtINR = (n)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(+n||0);
+
+    function todayIST(){
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset()*60000;
+      const ist = new Date(utc + 5.5*3600000);
+      const y=ist.getFullYear(), m=String(ist.getMonth()+1).padStart(2,"0"), d=String(ist.getDate()).padStart(2,"0");
+      return `${y}-${m}-${d}`;
+    }
+    $("todayText").textContent = new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+    ["expenseDate","incomeDate","settlementDate"].forEach(id=>$(id).value=todayIST());
+
+    const expenseCategories = [
+      "Food Expenses","Office Stationery","Refunds","Material Purchases","Advance Payments",
+      "Fuel Expenses","Vehicle Maintenance","Loading/Unloading Labour Charges","Utility Bills","Miscellaneous"
+    ];
+    const incomeCategories = [
+      "Packers & Movers","Courier Services","Railway Ticket Booking","Flight Ticket Booking",
+      "Jan Seva Kendra","Passport Services","PAN Card Services","Other Services"
+    ];
+
+    const fillOptions = (el, list, label)=>{ el.innerHTML = `<option value="">${label}</option>` + list.map(x=>`<option>${x}</option>`).join(""); };
+    fillOptions($("expenseCategory"), expenseCategories, "Category");
+    fillOptions($("incomeCategory"),  incomeCategories,  "Category");
+    fillOptions($("settleExpenseCategory"), expenseCategories, "Expense Category (optional)");
+    fillOptions($("settleIncomeCategory"),  incomeCategories,  "Income Category (optional)");
+
+    document.querySelectorAll(".tab").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        document.querySelectorAll(".tab").forEach(b=>b.classList.remove("tab-active"));
+        btn.classList.add("tab-active");
+        ["expenses","income","settlement","totals","history"].forEach(id=>$(id).classList.add("hidden"));
+        $(btn.dataset.tab).classList.remove("hidden");
+      });
+    });
+
+    function showError(e){ $("errText").textContent = e?.message || e; $("errBar").classList.remove("hidden"); setTimeout(()=>$("errBar").classList.add("hidden"), 5000); }
+
+    $("btnSignIn").addEventListener("click", async ()=>{
+      $("authMsg").textContent="";
+      try{ await signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value); }
+      catch(e){ $("authMsg").textContent = e?.message || "Sign-in failed"; }
+    });
+    $("btnSignOutTop").addEventListener("click", ()=>signOut(auth).catch(showError));
+
+    onAuthStateChanged(auth, (user)=>{
+      if(user){
+        $("whoami").textContent=user.email;
+        $("authCard").classList.add("hidden"); $("app").classList.remove("hidden"); $("btnSignOutTop").classList.remove("hidden");
+        startRealtime($("expenseDate").value);
+      }else{
+        $("authCard").classList.remove("hidden"); $("app").classList.add("hidden"); $("btnSignOutTop").classList.add("hidden");
+      }
+    });
+
+    function getSelDate(){ return $("expenseDate").value || todayIST(); }
+    ["expenseDate","incomeDate","settlementDate"].forEach(id=>{
+      $(id).addEventListener("change", e=>{
+        ["expenseDate","incomeDate","settlementDate"].forEach(k=>{ if(k!==id) $(k).value = e.target.value; });
+        startRealtime(getSelDate());
+      });
+    });
+
+    $("expenseForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const item = {
+        date:$("expenseDate").value, category:$("expenseCategory").value, payment:$("expensePayment").value,
+        description:$("expenseDescription").value, amount:parseFloat($("expenseAmount").value||0),
+        updatedAt:serverTimestamp(), updatedBy:auth.currentUser?.email
+      };
+      if(!item.category||!item.payment||!item.amount) return showError("Category, Mode, Amount required.");
+      try{ await addDoc(collection(db,"expenses"), item); e.target.reset(); $("expenseDate").value=getSelDate(); }catch(showError){}
+    });
+
+    $("incomeForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const item = {
+        date:$("incomeDate").value, category:$("incomeCategory").value, payment:$("incomePayment").value,
+        description:$("incomeDescription").value, amount:parseFloat($("incomeAmount").value||0),
+        updatedAt:serverTimestamp(), updatedBy:auth.currentUser?.email
+      };
+      if(!item.category||!item.payment||!item.amount) return showError("Category, Mode, Amount required.");
+      try{ await addDoc(collection(db,"income"), item); e.target.reset(); $("incomeDate").value=getSelDate(); }catch(showError){}
+    });
+
+    $("settlementForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const item = {
+        date:$("settlementDate").value, type:$("settlementType").value,
+        expCategory:$("settleExpenseCategory").value || null,
+        incCategory:$("settleIncomeCategory").value || null,
+        description:$("settlementDescription").value, amount:parseFloat($("settlementAmount").value||0),
+        updatedAt:serverTimestamp(), updatedBy:auth.currentUser?.email
+      };
+      if(!item.type||!item.amount) return showError("Type & Amount required.");
+      try{ await addDoc(collection(db,"settlement"), item); e.target.reset(); $("settlementDate").value=getSelDate(); }catch(showError){}
+    });
+
+    let unE=null, unI=null, unS=null;
+    function startRealtime(d){
+      if(unE)unE(); if(unI)unI(); if(unS)unS();
+      const expQ=query(collection(db,"expenses"), where("date","==",d));
+      const incQ=query(collection(db,"income"),   where("date","==",d));
+      const setQ=query(collection(db,"settlement"), where("date","==",d));
+
+      unE=onSnapshot(expQ, snap=>{ renderList($("expensesList"), snap.docs.map(x=>({id:x.id,...x.data()})),"expense"); updateTotals(); });
+      unI=onSnapshot(incQ, snap=>{ renderList($("incomesList"),snap.docs.map(x=>({id:x.id,...x.data()})),"income"); updateTotals(); });
+      unS=onSnapshot(setQ, snap=>{ renderList($("settlementList"),snap.docs.map(x=>({id:x.id,...x.data()})),"settlement"); updateTotals(); });
+    }
+
+    function renderList(container, arr, type){
+      container.innerHTML="";
+      arr.sort((a,b)=>(a.updatedAt?.seconds||0)-(b.updatedAt?.seconds||0));
+      arr.forEach(it=>{
+        let color;
+        if(type==='expense') color='text-expense';
+        else if(type==='income') color='text-income';
+        else {
+          const sign = (it.type==='Given'?-1:1);
+          color = sign<0 ? 'text-expense' : 'text-income';
+        }
+        const shownAmt = type==='settlement' ? (it.type==='Given'?-1:1)*Number(it.amount||0) : Number(it.amount||0);
+        const cat   = (type==='settlement'?(it.expCategory||it.incCategory||it.type):it.category)||"-";
+        const mode  = (type==='settlement'?it.type:(it.payment||"-"));
+        const row=document.createElement("div");
+        row.className="border rounded-xl px-3 py-2";
+        row.innerHTML=`
+          <div class="flex justify-between items-center gap-3">
+            <div class="text-sm">
+              <div class="font-semibold">${cat}</div>
+              <div class="text-slate-500">${new Date(it.date).toLocaleDateString('en-IN')} • ${mode}</div>
+              <div class="text-slate-700">${it.description||""}</div>
+            </div>
+            <div class="text-right ${color} font-bold">${fmtINR(shownAmt)}</div>
+          </div>`;
+        container.appendChild(row);
+      });
+      const total = arr.reduce((s,x)=>{
+        if(type==='settlement') return s + (x.type==='Given'?-1:1)*Number(x.amount||0);
+        return s + Number(x.amount||0);
+      },0);
+      container.dataset[type+"Total"]=total;
+    }
+
+    function updateTotals(){
+      const e=+($("expensesList").dataset.expenseTotal||0);
+      const i=+($("incomesList").dataset.incomeTotal||0);
+      const s=+($("settlementList").dataset.settlementTotal||0);
+      $("totalExpenses").textContent=fmtINR(e);
+      $("totalIncome").textContent=fmtINR(i);
+      $("netBalance").textContent=fmtINR(i-e+s);
+    }
+
+    async function buildDailySummary(forDate){
+      const [ex,inc,setl] = await Promise.all([
+        getDocs(query(collection(db,"expenses"),   where("date","==",forDate))),
+        getDocs(query(collection(db,"income"),     where("date","==",forDate))),
+        getDocs(query(collection(db,"settlement"), where("date","==",forDate)))
+      ]);
+      const exRows = ex.docs.map(d=>d.data());
+      const inRows = inc.docs.map(d=>d.data());
+      const seRows = setl.docs.map(d=>d.data());
+      const exTotal = exRows.reduce((s,x)=>s+Number(x.amount||0),0);
+      const inTotal = inRows.reduce((s,x)=>s+Number(x.amount||0),0);
+      const seTotal = seRows.reduce((s,x)=>s + (x.type==="Given"?-1:1)*Number(x.amount||0),0);
+      const opening = seRows.filter(x=>x.type==="Opening").reduce((t,x)=>t+Number(x.amount||0),0);
+
+      const lines = [];
+      lines.push(`DAILY SUMMARY`);
+      lines.push(`Date: ${forDate.split("-").reverse().join("/")}`);
+      lines.push(`--------------------------------`);
+      lines.push(`Income: ${fmtINR(inTotal)}`);
+      inRows.forEach(x=>lines.push(` • ${(x.category||"-")} ${fmtINR(x.amount||0)} (${x.payment||"-"})${x.description?` - ${x.description}`:""}`));
+      lines.push(``);
+      lines.push(`Expenses: ${fmtINR(exTotal)}`);
+      exRows.forEach(x=>lines.push(` • ${(x.category||"-")} ${fmtINR(x.amount||0)} (${x.payment||"-"})${x.description?` - ${x.description}`:""}`));
+      if(seRows.length){
+        lines.push(``);
+        lines.push(`Settlements: ${fmtINR(seTotal)} (Received +, Given -)`);
+        seRows.forEach(x=>lines.push(` • ${(x.expCategory||x.incCategory||x.type||"-")} ${fmtINR(x.amount||0)}${x.description?` - ${x.description}`:""}`));
+      }
+      lines.push(`--------------------------------`);
+      lines.push(`Opening: ${fmtINR(opening)}`);
+      lines.push(`Net (Closing): ${fmtINR(inTotal - exTotal + seTotal + opening)}`);
+      return lines.join("\n");
+    }
+
+    function openWA(text, to="919338888550"){
+      const base = `https://wa.me/${to}`;
+      window.open(`${base}?text=${encodeURIComponent(text)}`,"_blank");
+    }
+
+    $("btnShareTodayWA").addEventListener("click", async ()=>{ openWA(await buildDailySummary(todayIST())); });
+    $("btnShareCustomWA").addEventListener("click", async ()=>{
+      const d = $("customShareDate").value || todayIST();
+      openWA(await buildDailySummary(d));
+    });
+    $("customShareDate").value=todayIST();
+
+    $("histFrom").value = todayIST();
+    $("histTo").value   = todayIST();
+    $("btnLoadHistory").addEventListener("click", async ()=>{
+      const from = $("histFrom").value, to = $("histTo").value;
+      const list = $("historyList");
+      list.innerHTML = "";
+      const d0 = new Date(from), d1 = new Date(to);
+      for(let d=new Date(d0); d<=d1; d.setDate(d.getDate()+1)){
+        const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
+        const key=`${y}-${m}-${da}`;
+        const [ex,inc,setl] = await Promise.all([
+          getDocs(query(collection(db,"expenses"), where("date","==",key))),
+          getDocs(query(collection(db,"income"),   where("date","==",key))),
+          getDocs(query(collection(db,"settlement"), where("date","==",key)))
+        ]);
+        const e = ex.docs.reduce((s,x)=>s+Number(x.data().amount||0),0);
+        const i = inc.docs.reduce((s,x)=>s+Number(x.data().amount||0),0);
+        const s = setl.docs.reduce((t,x)=>t + (x.data().type==="Given"?-1:1)*Number(x.data().amount||0),0);
+        const opening = setl.docs.filter(x=>x.data().type==="Opening").reduce((t,x)=>t+Number(x.data().amount||0),0);
+        const card=document.createElement("div");
+        card.className="card p-3";
+        card.innerHTML=`
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div class="font-semibold">Date: ${key.split("-").reverse().join("/")}</div>
+              <div class="text-slate-600 text-sm">Opening: ${fmtINR(opening)} | Expenses: ${fmtINR(e)} | Receiving: ${fmtINR(i)} | Net (Closing): ${fmtINR(i-e+s+opening)}</div>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn btn-primary w-full sm:w-auto" data-wa="${key}">WhatsApp (Totals)</button>
+            </div>
+          </div>`;
+        card.querySelector("[data-wa]").addEventListener("click", async ()=>{
+          openWA(await buildDailySummary(key));
+        });
+        list.appendChild(card);
+      }
+    });
+  </script>
+</body>
+</html>
